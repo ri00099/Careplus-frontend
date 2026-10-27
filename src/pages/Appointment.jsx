@@ -92,7 +92,20 @@ const Appointment = () => {
             return navigate('/login')
         }
 
-        const date = docSlots[slotIndex][0].datetime
+        const selectedDaySlots = docSlots[slotIndex]
+        if (!selectedDaySlots?.length || !slotTime) {
+            toast.warning('Please select an available appointment time')
+            return
+        }
+
+        const selectedSlot = selectedDaySlots.find((slot) => slot.time === slotTime)
+        if (!selectedSlot) {
+            toast.warning('Please select an available appointment time')
+            setSlotTime('')
+            return
+        }
+
+        const date = selectedSlot.datetime
 
         let day = date.getDate()
         let month = date.getMonth() + 1
@@ -108,12 +121,12 @@ const Appointment = () => {
                 getDoctosData()
                 navigate('/my-appointments')
             } else {
-                toast.error(data.message)
+                toast.error(data.message || 'Unable to book appointment')
             }
 
         } catch (error) {
             console.log(error)
-            toast.error(error.message)
+            toast.error(error.response?.data?.message || error.message)
         }
 
     }
@@ -163,8 +176,11 @@ const Appointment = () => {
             <div className='sm:ml-72 sm:pl-4 mt-8 font-medium text-[#565656]'>
                 <p >Booking slots</p>
                 <div className='flex gap-3 items-center w-full overflow-x-scroll mt-4'>
-                    {docSlots.length && docSlots.map((item, index) => (
-                        <div onClick={() => setSlotIndex(index)} key={index} className={`text-center py-6 min-w-16 rounded-full cursor-pointer ${slotIndex === index ? 'bg-primary text-white' : 'border border-[#DDDDDD]'}`}>
+                    {docSlots.length > 0 && docSlots.map((item, index) => (
+                        <div onClick={() => {
+                            setSlotIndex(index)
+                            setSlotTime('')
+                        }} key={index} className={`text-center py-6 min-w-16 rounded-full cursor-pointer ${slotIndex === index ? 'bg-primary text-white' : 'border border-[#DDDDDD]'}`}>
                             <p>{item[0] && daysOfWeek[item[0].datetime.getDay()]}</p>
                             <p>{item[0] && item[0].datetime.getDate()}</p>
                         </div>
@@ -172,7 +188,7 @@ const Appointment = () => {
                 </div>
 
                 <div className='flex items-center gap-3 w-full overflow-x-scroll mt-4'>
-                    {docSlots.length && docSlots[slotIndex].map((item, index) => (
+                    {docSlots[slotIndex]?.map((item, index) => (
                         <p onClick={() => setSlotTime(item.time)} key={index} className={`text-sm font-light  flex-shrink-0 px-5 py-2 rounded-full cursor-pointer ${item.time === slotTime ? 'bg-primary text-white' : 'text-[#949494] border border-[#B4B4B4]'}`}>{item.time.toLowerCase()}</p>
                     ))}
                 </div>

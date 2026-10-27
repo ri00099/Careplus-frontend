@@ -3,14 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { AppContext } from "../context/AppContext";
 import axios from "axios";
 import { toast } from "react-toastify";
-import { assets } from "../assets/assets";
 
 const MyAppointments = () => {
   const { backendUrl, token } = useContext(AppContext);
   const navigate = useNavigate();
 
   const [appointments, setAppointments] = useState([]);
-  const [payment, setPayment] = useState("");
+  const [payingAppointment, setPayingAppointment] = useState("");
 
   const months = [
     "Jan",
@@ -44,7 +43,7 @@ const MyAppointments = () => {
       setAppointments(data.appointments.reverse());
     } catch (error) {
       console.log(error);
-      toast.error(error.message);
+      toast.error(error.response?.data?.message || error.message);
     }
   };
 
@@ -65,7 +64,7 @@ const MyAppointments = () => {
       }
     } catch (error) {
       console.log(error);
-      toast.error(error.message);
+      toast.error(error.response?.data?.message || error.message);
     }
   };
 
@@ -91,9 +90,14 @@ const MyAppointments = () => {
     }
   };
 
-  const initPay = (order) => {
+  const initPay = (order, keyId) => {
+    if (typeof window.Razorpay !== "function") {
+      toast.error("Razorpay checkout could not load. Check your internet connection and try again.");
+      return;
+    }
+
     const options = {
-      key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+      key: keyId,
       amount: order.amount,
       currency: order.currency,
       name: "Appointment Payment",
@@ -101,8 +105,6 @@ const MyAppointments = () => {
       order_id: order.id,
       receipt: order.receipt,
       handler: async (response) => {
-        console.log(response);
-
         try {
           const { data } = await axios.post(
             backendUrl + "/api/user/verifyRazorpay",
@@ -110,21 +112,31 @@ const MyAppointments = () => {
             { headers: { token } },
           );
           if (data.success) {
+            toast.success(data.message || "Payment successful");
             navigate("/my-appointments");
             getUserAppointments();
+          } else {
+            toast.error(data.message || "Unable to verify payment");
           }
         } catch (error) {
           console.log(error);
-          toast.error(error.message);
+          toast.error(error.response?.data?.message || error.message);
         }
       },
     };
+
     const rzp = new window.Razorpay(options);
+    rzp.on("payment.failed", (response) => {
+      toast.error(
+        response.error?.description ||
+          "Razorpay could not complete the payment. Try another payment method.",
+      );
+    });
     rzp.open();
   };
 
-  // Function to make payment using razorpay
   const appointmentRazorpay = async (appointmentId) => {
+    setPayingAppointment(appointmentId);
     try {
       const { data } = await axios.post(
         backendUrl + "/api/user/payment-razorpay",
@@ -132,33 +144,15 @@ const MyAppointments = () => {
         { headers: { token } },
       );
       if (data.success) {
-        initPay(data.order);
+        initPay(data.order, data.keyId);
       } else {
-        toast.error(data.message);
+        toast.error(data.message || "Unable to start Razorpay checkout");
       }
     } catch (error) {
       console.log(error);
-      toast.error(error.message);
-    }
-  };
-
-  // Function to make payment using stripe
-  const appointmentStripe = async (appointmentId) => {
-    try {
-      const { data } = await axios.post(
-        backendUrl + "/api/user/payment-stripe",
-        { appointmentId },
-        { headers: { token } },
-      );
-      if (data.success) {
-        const { session_url } = data;
-        window.location.replace(session_url);
-      } else {
-        toast.error(data.message);
-      }
-    } catch (error) {
-      console.log(error);
-      toast.error(error.message);
+      toast.error(error.response?.data?.message || error.message);
+    } finally {
+      setPayingAppointment("");
     }
   };
 
@@ -212,42 +206,15 @@ const MyAppointments = () => {
               {!item.cancelled &&
                 !item.payment &&
                 !item.isCompleted &&
-                payment !== item._id && (
-                  <button
-                    onClick={() => setPayment(item._id)}
-                    className="text-[#696969] sm:min-w-48 py-2 border rounded hover:bg-primary hover:text-white transition-all duration-300"
-                  >
-                    Pay Online
-                  </button>
-                )}
-              {!item.cancelled &&
-                !item.payment &&
-                !item.isCompleted &&
-                payment === item._id && (
-                  <button
-                    onClick={() => appointmentStripe(item._id)}
-                    className="text-[#696969] sm:min-w-48 py-2 border rounded hover:bg-gray-100 hover:text-white transition-all duration-300 flex items-center justify-center"
-                  >
-                    <img
-                      className="max-w-20 max-h-5"
-                      src={assets.stripe_logo}
-                      alt=""
-                    />
-                  </button>
-                )}
-              {!item.cancelled &&
-                !item.payment &&
-                !item.isCompleted &&
-                payment === item._id && (
+                (
                   <button
                     onClick={() => appointmentRazorpay(item._id)}
-                    className="text-[#696969] sm:min-w-48 py-2 border rounded hover:bg-gray-100 hover:text-white transition-all duration-300 flex items-center justify-center"
+                    disabled={payingAppointment === item._id}
+                    className="text-[#696969] sm:min-w-48 py-2 border rounded hover:bg-gray-100 hover:text-gray-900 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-300 flex items-center justify-center"
                   >
-                    <img
-                      className="max-w-20 max-h-5"
-                      src={assets.razorpay_logo}
-                      alt=""
-                    />
+                    {payingAppointment === item._id
+                      ? "Opening Razorpay..."
+                      : "Pay with Razorpay"}
                   </button>
                 )}
               {!item.cancelled && item.payment && !item.isCompleted && (

@@ -28,9 +28,13 @@ const Login = () => {
         return toast.error("Enter email first");
       }
 
+      if (!backendUrl) {
+        return toast.error("Backend URL is not configured");
+      }
+
       const { data } = await axios.post(
         backendUrl + "/api/user/send-otp",
-        { email }
+        { email: email.trim() }
       );
 
       if (data.success) {
@@ -41,7 +45,7 @@ const Login = () => {
       }
 
     } catch (error) {
-      toast.error("Failed to send OTP");
+      toast.error(error.response?.data?.message || "Failed to send OTP");
     }
   };
 
@@ -50,20 +54,24 @@ const Login = () => {
 
     try {
 
+      if (!backendUrl) {
+        return toast.error("Backend URL is not configured");
+      }
+
       const { data } = await axios.post(
         backendUrl + "/api/user/verify-otp",
-        { email, otp }
+        { email: email.trim(), otp }
       );
 
       if (data.success) {
         toast.success("Email verified");
         setOtpVerified(true);
       } else {
-        toast.error("Invalid OTP");
+        toast.error(data.message || "Invalid OTP");
       }
 
     } catch (error) {
-      toast.error("OTP verification failed");
+      toast.error(error.response?.data?.message || "OTP verification failed");
     }
   };
 
@@ -153,7 +161,12 @@ const Login = () => {
         <div className="w-full">
           <p>Email</p>
           <input
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setOtp("");
+              setOtpSent(false);
+              setOtpVerified(false);
+            }}
             value={email}
             className="border rounded w-full p-2 mt-1"
             type="email"
